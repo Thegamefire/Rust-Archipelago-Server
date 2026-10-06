@@ -22,6 +22,12 @@ pub struct RawSeed {
     race_mode: i32,
 }
 
+impl RawSeed {
+    pub fn slot_ids(&self) -> Vec<SlotId> {
+        self.slot_data.keys().map(|s| s.clone()).collect()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct MinimumVersions {
     server: (u16, u16, u16),
