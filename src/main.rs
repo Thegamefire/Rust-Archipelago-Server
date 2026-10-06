@@ -1,0 +1,9 @@
+use std::fs::read_to_string;
+use archipelago_server_rs::seed::RawSeed;
+
+fn main() {
+    let path = "/home/nathano/Archipelago/output/AP_84615277806355214168.json";
+    let seed = serde_json::from_str::<RawSeed>(&*read_to_string(path).unwrap()).unwrap();
+    println!("{:?}", seed);
+    println!("Hello, world!");
+}
