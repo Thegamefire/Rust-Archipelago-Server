@@ -7,8 +7,13 @@ use tokio::sync::{Mutex};
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 use archipelago_server_rs::messages::client::ClientPacket;
-use archipelago_server_rs::messages::server::RoomInfoPacket;
+use archipelago_server_rs::messages::server::datapackage::DataPackagePacket;
+use archipelago_server_rs::messages::server::ServerPacket;
+use archipelago_server_rs::messages::server::roominfo::RoomInfoPacket;
+use archipelago_server_rs::messages::server::invalid::InvalidPacketPacket;
+use archipelago_server_rs::messages::server::invalid::PacketProblemType::Arguments;
 use archipelago_server_rs::seed::Seed;
+use archipelago_server_rs::send_packet;
 use archipelago_server_rs::state::MultiworldState;
 
 #[tokio::main]
@@ -40,13 +45,30 @@ async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<Mutex
     let (mut tx, mut rx) = ws_stream.split();
     let mut connected = false;
     let state = state.lock().await;
-    let json = serde_json::to_string(&RoomInfoPacket::new(&seed, &state)).unwrap();
-    tx.send(Message::Text(json.into())).await.expect("TODO: panic message");
+    send_packet(&mut tx, ServerPacket::RoomInfo(RoomInfoPacket::new(&seed, &state))).await;
     while (!connected) {
         if let Some(Ok(msg)) = rx.next().await {
             match msg {
                 Message::Text(raw_msg)  => {
-                    serde_json::from_slice::<ClientPacket>(raw_msg.as_ref()).expect("TODO: panic message");
+                    let Ok(packet) = serde_json::from_slice::<ClientPacket>(raw_msg.as_ref()) else {
+                        println!("Client sent malformed packet");
+                        return;
+                    };
+
+                    match packet {
+                        ClientPacket::GetDataPackage(gdppacket) => {
+                            if let Ok(return_packet) = DataPackagePacket::new(&seed, gdppacket.games) {
+                                send_packet(&mut tx, ServerPacket::DataPackage(return_packet)).await;
+                            } else {
+                                send_packet(&mut tx, ServerPacket::InvalidPacket(
+                                    InvalidPacketPacket {
+                                        problem_type: Arguments,
+                                        original_cmd: Some("GetDataPackage".into()),
+                                        text: "Invalid Games".into()
+                                    })).await;
+                            }
+                        }
+                    }
                 },
                 Message::Ping(_) | Message::Pong(_) => {},
                 Message::Close(_) => {
