@@ -1,4 +1,3 @@
-use std::cmp::min;
 use serde::{Deserialize, Serialize, Serializer};
 
 pub mod client;
@@ -12,13 +11,13 @@ struct NetworkVersion {
     build: u16,
 }
 impl NetworkVersion {
-    fn new(major: u16, minor: u16, build: u16) {
+    fn new(major: u16, minor: u16, build: u16) -> NetworkVersion {
         NetworkVersion {
             class: String::from("Version"),
             major,
             minor,
             build,
-        };
+        }
     }
 }
 

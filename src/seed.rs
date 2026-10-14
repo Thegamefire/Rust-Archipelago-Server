@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use crate::structs::{ItemId, LocationId, SlotId};
+use crate::structs::{GameName, ItemId, LocationId, SlotId, SlotName};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RawSeed {
+pub struct Seed {
     slot_data: HashMap<SlotId, serde_json::Value>,
-    slot_info: HashMap<SlotId, (String, String, u8, Vec<SlotId>)>,
+    slot_info: HashMap<SlotId, (SlotName, GameName, u8, Vec<SlotId>)>,
     connect_names: HashMap<String, (i32, SlotId /* slot id */)>,
     locations: HashMap<SlotId, /*location slot id*/ HashMap<LocationId /* Location Id */, (ItemId /* item id */, u32 /* item owner */, u8 /* item flags */)>>,
     // checks_in_area: serde_json::Value,
@@ -13,18 +13,28 @@ pub struct RawSeed {
     // er_hint_data:  serde_json::Value,
     precollected_items: HashMap<SlotId /* slot id */, Vec<ItemId/* item id */>>,
     precollected_hints: HashMap<SlotId /* slot id */, Vec<ItemId/* item id */>>,
-    version: (u16, u16, u16),
+    pub version: (u16, u16, u16),
     // tags: Vec<String>
     minimum_versions: MinimumVersions,
-    seed_name: String,
+    pub seed_name: String,
     spheres: Vec<HashMap<SlotId, Vec<i64 /*item or location id idk*/>>>,
-    datapackage: HashMap<String, GameDatapackagePart>,
+    datapackage: HashMap<GameName, GameDatapackagePart>,
     race_mode: i32,
 }
 
-impl RawSeed {
+impl Seed {
     pub fn slot_ids(&self) -> Vec<SlotId> {
         self.slot_data.keys().map(|s| s.clone()).collect()
+    }
+    pub fn games(&self) -> Vec<GameName> {
+        self.slot_info.values().map(|(_, game, _, _)| game.clone()).collect()
+    }
+    pub fn datapackage_checksums(&self) -> HashMap<GameName, String> {
+        let mut result = HashMap::new();
+        for (game, part) in &self.datapackage {
+            result.insert(game.clone(), part.checksum.clone());
+        }
+        result
     }
 }
 
