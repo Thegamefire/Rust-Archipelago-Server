@@ -50,22 +50,23 @@ async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<Mutex
         if let Some(Ok(msg)) = rx.next().await {
             match msg {
                 Message::Text(raw_msg)  => {
-                    let Ok(packet) = serde_json::from_slice::<ClientPacket>(raw_msg.as_ref()) else {
+                    let Ok(packets) = serde_json::from_slice::<Vec<ClientPacket>>(raw_msg.as_ref()) else {
                         println!("Client sent malformed packet");
                         return;
                     };
-
-                    match packet {
-                        ClientPacket::GetDataPackage(gdppacket) => {
-                            if let Ok(return_packet) = DataPackagePacket::new(&seed, gdppacket.games) {
-                                send_packet(&mut tx, ServerPacket::DataPackage(return_packet)).await;
-                            } else {
-                                send_packet(&mut tx, ServerPacket::InvalidPacket(
-                                    InvalidPacketPacket {
-                                        problem_type: Arguments,
-                                        original_cmd: Some("GetDataPackage".into()),
-                                        text: "Invalid Games".into()
-                                    })).await;
+                    for packet in packets {
+                        match packet {
+                            ClientPacket::GetDataPackage(gdppacket) => {
+                                if let Ok(return_packet) = DataPackagePacket::new(&seed, gdppacket.games) {
+                                    send_packet(&mut tx, ServerPacket::DataPackage(return_packet)).await;
+                                } else {
+                                    send_packet(&mut tx, ServerPacket::InvalidPacket(
+                                        InvalidPacketPacket {
+                                            problem_type: Arguments,
+                                            original_cmd: Some("GetDataPackage".into()),
+                                            text: "Invalid Games".into()
+                                        })).await;
+                                }
                             }
                         }
                     }
