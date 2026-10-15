@@ -6,9 +6,10 @@ use tokio_tungstenite::WebSocketStream;
 use crate::messages::server::ServerPacket;
 
 pub mod seed;
-mod structs;
+pub mod structs;
 pub mod state;
 pub mod messages;
+pub mod connection;
 
 pub async fn send_packet(tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>, packet: ServerPacket) {
     tx.send(Message::Text(serde_json::to_string(&packet).unwrap().into())).await.expect("TODO: panic message");

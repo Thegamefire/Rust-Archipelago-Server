@@ -1,19 +1,11 @@
 use std::fs::read_to_string;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex};
 use tokio_tungstenite::accept_async;
-use tokio_tungstenite::tungstenite::Message;
-use archipelago_server_rs::messages::client::ClientPacket;
-use archipelago_server_rs::messages::server::datapackage::DataPackagePacket;
-use archipelago_server_rs::messages::server::ServerPacket;
-use archipelago_server_rs::messages::server::roominfo::RoomInfoPacket;
-use archipelago_server_rs::messages::server::invalid::InvalidPacketPacket;
-use archipelago_server_rs::messages::server::invalid::PacketProblemType::Arguments;
+use archipelago_server_rs::connection::ConnectionManager;
 use archipelago_server_rs::seed::Seed;
-use archipelago_server_rs::send_packet;
 use archipelago_server_rs::state::MultiworldState;
 
 #[tokio::main]
@@ -42,50 +34,6 @@ async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<Mutex
         return;
     };
     println!("Connection opened with adress {}", addr);
-    let (mut tx, mut rx) = ws_stream.split();
-    let mut connected = false;
-    let state = state.lock().await;
-    send_packet(&mut tx, ServerPacket::RoomInfo(RoomInfoPacket::new(&seed, &state))).await;
-    while (!connected) {
-        if let Some(Ok(msg)) = rx.next().await {
-            match msg {
-                Message::Text(raw_msg)  => {
-                    let Ok(packets) = serde_json::from_slice::<Vec<ClientPacket>>(raw_msg.as_ref()) else {
-                        println!("Client sent malformed packet");
-                        return;
-                    };
-                    for packet in packets {
-                        match packet {
-                            ClientPacket::GetDataPackage(gdppacket) => {
-                                if let Ok(return_packet) = DataPackagePacket::new(&seed, gdppacket.games) {
-                                    send_packet(&mut tx, ServerPacket::DataPackage(return_packet)).await;
-                                } else {
-                                    send_packet(&mut tx, ServerPacket::InvalidPacket(
-                                        InvalidPacketPacket {
-                                            problem_type: Arguments,
-                                            original_cmd: Some("GetDataPackage".into()),
-                                            text: "Invalid Games".into()
-                                        })).await;
-                                }
-                            }
-                        }
-                    }
-                },
-                Message::Ping(_) | Message::Pong(_) => {},
-                Message::Close(_) => {
-                    println!("Connection closed at {}", addr);
-                    let _ = tx.close().await;
-                    return;
-                },
-                _ => {
-                    eprintln!("Client sent unexpected ws message");
-                }
-            }
-
-        } else {
-            println!("Connection closed at {}", addr);
-            return;
-        }
-    }
-
+    let conn = ConnectionManager::new(addr, ws_stream, state, seed);
+    conn.start_listening().await;
 }
