@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 use ServerPacket::InvalidPacket;
+use crate::connection::ClientError::{InvalidArguments, NotConnected};
 use crate::connection::ConnectionRefusedReason::{InvalidGame, InvalidItemsHandling, InvalidSlot};
 use crate::messages::client::ClientPacket;
 use crate::messages::server::connected::ConnectedPacket;
@@ -93,6 +94,11 @@ impl ConnectionManager {
                             }),
                             ClientError::ConnectionRefused(errors) => ConnectionRefused(ConnectionRefusedPacket {
                                 errors
+                            }),
+                            ClientError::NotConnected{ command} => InvalidPacket(InvalidPacketPacket {
+                                problem_type: PacketProblemType::Cmd,
+                                original_cmd: None,
+                                text: format!("Packet of type {} not allowed while unauthenticated", command)
                             })
                         }).await;
                     }
@@ -123,7 +129,9 @@ impl ConnectionManager {
                 let mut connection_refused_reasons: Vec<ConnectionRefusedReason> = vec![];
                 // TODO Check Version
                 // TODO Check Password
-                if c_packet.items_handling > 0b111 {
+                if c_packet.items_handling > 0b111
+                    || c_packet.items_handling & 0b001 == 0 && c_packet.items_handling > 0
+                {
                     connection_refused_reasons.push(InvalidItemsHandling)
                 }
                 let Some((team_id, slot_id)) = self.seed.connect_names.get(&c_packet.name) else {
@@ -169,6 +177,22 @@ impl ConnectionManager {
                 });
                 send_packet(&mut self.tx, result).await;
             },
+            ClientPacket::ConnectUpdate(c_packet) => {
+                let Some(info) = &self.connection_info else {
+                    return Err(NotConnected {command: "ConnectUpdate".into()});
+                };
+                if c_packet.items_handling > 0b111
+                    || c_packet.items_handling & 0b001 == 0 && c_packet.items_handling > 0
+                {
+                    return Err(InvalidArguments {command: "ConnectUpdate".into(), text: "Invalid items_handling".into()})
+                }
+                self.connection_info = Some(ConnectionInfo {
+                    slot: info.slot,
+                    game: info.game.clone(),
+                    tags: c_packet.tags,
+                    items_handling: c_packet.items_handling,
+                })
+            }
         })
     }
 }
@@ -176,5 +200,6 @@ impl ConnectionManager {
 pub enum ClientError {
     InvalidArguments { command: String, text: String},
     InvalidCommand { text: String },
-    ConnectionRefused (Vec<ConnectionRefusedReason>)
+    ConnectionRefused (Vec<ConnectionRefusedReason>),
+    NotConnected {command: String},
 }
