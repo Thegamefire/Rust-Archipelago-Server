@@ -1,6 +1,6 @@
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use derive_more::Display;
 
 #[derive(Deserialize, Serialize, Debug, Display, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ItemId(i64);
@@ -32,5 +32,7 @@ impl TeamId {
 #[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone)]
 #[repr(u8)]
 pub enum SlotType {
-    Spectator = 0, Player = 1, Group = 2
+    Spectator = 0,
+    Player = 1,
+    Group = 2,
 }

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize, Serializer};
 use crate::structs::{ItemId, LocationId, SlotId, SlotName, TeamId};
+use serde::{Deserialize, Serialize};
 
 pub mod client;
 pub mod server;
@@ -57,12 +57,16 @@ impl NetworkItem {
             item,
             location,
             player,
-            flags
+            flags,
         }
     }
 }
 
 #[derive(Deserialize, Serialize)]
 enum Permission {
-    Disabled, Enabled, Goal, Auto, AutoEnabled
+    Disabled,
+    Enabled,
+    Goal,
+    Auto,
+    AutoEnabled,
 }

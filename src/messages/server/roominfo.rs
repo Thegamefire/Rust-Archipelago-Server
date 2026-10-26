@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::messages::{NetworkVersion, Permission};
 use crate::seed::Seed;
 use crate::state::MultiworldState;
 use crate::structs::GameName;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Deserialize, Serialize)]
 pub struct RoomInfoPacket {
@@ -36,5 +36,3 @@ impl RoomInfoPacket {
         }
     }
 }
-
-

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use crate::structs::{GameName, ItemId, LocationId, SlotId, SlotName, SlotType, TeamId};
 use crate::messages::NetworkPlayer;
+use crate::structs::{GameName, ItemId, LocationId, SlotId, SlotName, SlotType, TeamId};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Seed {
@@ -25,10 +25,13 @@ pub struct Seed {
 
 impl Seed {
     pub fn slot_ids(&self) -> Vec<SlotId> {
-        self.slot_data.keys().map(|s| s.clone()).collect()
+        self.slot_data.keys().copied().collect()
     }
     pub fn games(&self) -> Vec<GameName> {
-        self.slot_info.values().map(|(_, game, _, _)| game.clone()).collect()
+        self.slot_info
+            .values()
+            .map(|(_, game, _, _)| game.clone())
+            .collect()
     }
     pub fn datapackage_checksums(&self) -> HashMap<GameName, String> {
         let mut result = HashMap::new();
@@ -39,21 +42,24 @@ impl Seed {
     }
 
     pub fn players(&self) -> Vec<NetworkPlayer> {
-        self.slot_info.iter().map(|(slot_id, (slot_name, game_name, slot_type, _))| {
-            NetworkPlayer::new(
-                TeamId::not_implemented(),
-                slot_id.clone(),
-                slot_name.clone().to_string(), // TODO implement Aliases
-                slot_name.clone(),
-            )
-        }).collect()
+        self.slot_info
+            .iter()
+            .map(|(slot_id, (slot_name, _, _, _))| {
+                NetworkPlayer::new(
+                    TeamId::not_implemented(),
+                    *slot_id,
+                    slot_name.clone().to_string(), // TODO implement Aliases
+                    slot_name.clone(),
+                )
+            })
+            .collect()
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MinimumVersions {
     server: (u16, u16, u16),
-    clients: HashMap<SlotId /*slot id*/, (u16, u16, u16)>
+    clients: HashMap<SlotId /*slot id*/, (u16, u16, u16)>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::messages::NetworkPlayer;
 use crate::structs::{GameName, LocationId, SlotId, SlotName, SlotType, TeamId};
-
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub struct ConnectedPacket {
