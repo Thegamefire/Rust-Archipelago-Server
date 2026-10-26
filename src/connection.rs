@@ -21,11 +21,15 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
+use uuid::Uuid;
+
+pub static CONNECTIONS: LazyLock<RwLock<HashMap<Uuid, Connection>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub struct ConnectionInfo {
     slot: SlotId,
@@ -34,38 +38,47 @@ pub struct ConnectionInfo {
     items_handling: u8,
 }
 
+pub struct Connection {
+    pub connection_info: Option<ConnectionInfo>,
+    pub tx: Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>,
+}
+
 pub struct ConnectionManager {
     addr: SocketAddr,
-    tx: SplitSink<WebSocketStream<TcpStream>, Message>,
     rx: SplitStream<WebSocketStream<TcpStream>>,
-    connection_info: Option<ConnectionInfo>,
 
     multiworld_state: Arc<Mutex<MultiworldState>>,
     seed: Arc<Seed>,
+    uuid: Uuid,
 }
 impl ConnectionManager {
-    pub fn new(
+    pub async fn new(
         addr: SocketAddr,
         ws_stream: WebSocketStream<TcpStream>,
         state: Arc<Mutex<MultiworldState>>,
         seed: Arc<Seed>,
     ) -> ConnectionManager {
         let (tx, rx) = ws_stream.split();
+        let uuid = Uuid::new_v4();
+        let connection = Connection {
+            connection_info: None,
+            tx: Mutex::new(tx),
+        };
+        CONNECTIONS.write().await.insert(uuid, connection);
         ConnectionManager {
             addr,
-            tx,
             rx,
-            connection_info: None,
 
             multiworld_state: state,
             seed,
+            uuid,
         }
     }
 
     pub async fn start_listening(mut self) {
         let locked_state = self.multiworld_state.lock().await;
         send_packet(
-            &mut self.tx,
+            self.uuid,
             ServerPacket::RoomInfo(RoomInfoPacket::new(&self.seed, &locked_state)),
         )
         .await;
@@ -94,7 +107,7 @@ impl ConnectionManager {
                 for packet in packets {
                     if let Err(error) = self.handle_packet(packet).await {
                         send_packet(
-                            &mut self.tx,
+                            self.uuid,
                             match error {
                                 ClientError::InvalidArguments { command, text } => {
                                     InvalidPacket(InvalidPacketPacket {
@@ -132,7 +145,15 @@ impl ConnectionManager {
             Message::Ping(_) | Message::Pong(_) => {}
             Message::Close(_) => {
                 println!("Connection closed at {}", self.addr);
-                let _ = self.tx.close().await;
+                let connections = CONNECTIONS.read().await;
+                let _ = connections
+                    .get(&self.uuid)
+                    .unwrap()
+                    .tx
+                    .lock()
+                    .await
+                    .close()
+                    .await;
             }
             _ => {
                 eprintln!("Client sent unexpected ws message");
@@ -144,7 +165,7 @@ impl ConnectionManager {
         match packet {
             ClientPacket::GetDataPackage(gdp_packet) => {
                 send_packet(
-                    &mut self.tx,
+                    self.uuid,
                     ServerPacket::DataPackage(DataPackagePacket::new(
                         &self.seed,
                         gdp_packet.games,
@@ -211,16 +232,22 @@ impl ConnectionManager {
                     items: locked_state.received_items(&self.seed, slot_id),
                 });
                 drop(locked_state);
-                self.connection_info = Some(ConnectionInfo {
-                    slot: *slot_id,
-                    game: slot_info.1.clone(),
-                    tags: c_packet.tags,
-                    items_handling: c_packet.items_handling,
-                });
-                send_packets(&mut self.tx, vec![connected_packet, received_items_packet]).await;
+                {
+                    let mut connections = CONNECTIONS.write().await;
+                    let connection = connections.get_mut(&self.uuid).unwrap();
+                    connection.connection_info = Some(ConnectionInfo {
+                        slot: *slot_id,
+                        game: slot_info.1.clone(),
+                        tags: c_packet.tags,
+                        items_handling: c_packet.items_handling,
+                    });
+                }
+                send_packets(self.uuid, vec![connected_packet, received_items_packet]).await;
             }
             ClientPacket::ConnectUpdate(c_packet) => {
-                let Some(info) = &self.connection_info else {
+                let mut connections = CONNECTIONS.write().await;
+                let connection = connections.get_mut(&self.uuid).unwrap();
+                let Some(info) = &connection.connection_info else {
                     return Err(NotConnected {
                         command: "ConnectUpdate".into(),
                     });
@@ -233,7 +260,7 @@ impl ConnectionManager {
                         text: "Invalid items_handling".into(),
                     });
                 }
-                self.connection_info = Some(ConnectionInfo {
+                connection.connection_info = Some(ConnectionInfo {
                     slot: info.slot,
                     game: info.game.clone(),
                     tags: c_packet.tags,
@@ -241,7 +268,9 @@ impl ConnectionManager {
                 })
             }
             ClientPacket::Sync => {
-                let Some(c_info) = &self.connection_info else {
+                let connections = CONNECTIONS.read().await;
+                let connection = connections.get(&self.uuid).unwrap();
+                let Some(c_info) = &connection.connection_info else {
                     return Err(NotConnected {
                         command: String::from("Sync"),
                     });
@@ -253,7 +282,8 @@ impl ConnectionManager {
                     items: locked_state.received_items(&self.seed, &c_info.slot),
                 });
                 drop(locked_state);
-                send_packet(&mut self.tx, received_items_packet).await;
+                drop(connections);
+                send_packet(self.uuid, received_items_packet).await;
             }
         };
         Ok(())

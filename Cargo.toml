@@ -11,3 +11,4 @@ tokio-tungstenite = "0.30.0"
 futures-util = "0.3.34"
 serde_repr = "0.1.21"
 derive_more = { version = "2.1.1", features = ["display"] }
+uuid = {version = "1.29.0", features = ["v4"]}

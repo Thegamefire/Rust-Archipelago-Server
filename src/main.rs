@@ -38,6 +38,6 @@ async fn handle_connection(
         return;
     };
     println!("Connection opened with adress {}", addr);
-    let conn = ConnectionManager::new(addr, ws_stream, state, seed);
+    let conn = ConnectionManager::new(addr, ws_stream, state, seed).await;
     conn.start_listening().await;
 }
