@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use crate::messages::NetworkItem;
 use crate::seed::Seed;
 use crate::structs::{LocationId, SlotAlias, SlotId, TeamId};
 
@@ -28,5 +29,17 @@ impl MultiworldState {
     }
     pub fn collected_locations(&self, slot: &SlotId) -> Vec<&LocationId> {
         self.collected_locations.get(slot).map(|s| s.iter().collect()).unwrap_or(vec![])
+    }
+
+    pub fn received_items(&self, seed: &Seed, slot: &SlotId) -> Vec<NetworkItem> {
+        let mut result = vec![];
+        for (location_slot, location_mapping) in &seed.locations {
+            for (location, item) in location_mapping {
+                if item.1 == *slot {
+                    result.push(NetworkItem::new(item.0, *location, *location_slot, item.2))
+                }
+            }
+        }
+        result
     }
 }

@@ -16,11 +16,12 @@ use crate::messages::server::connection_refused::{ConnectionRefusedPacket, Conne
 use crate::messages::server::datapackage::DataPackagePacket;
 use crate::messages::server::invalid::{InvalidPacketPacket, PacketProblemType};
 use crate::messages::server::invalid::PacketProblemType::Arguments;
+use crate::messages::server::received_items::ReceivedItemsPacket;
 use crate::messages::server::roominfo::RoomInfoPacket;
 use crate::messages::server::ServerPacket;
 use crate::messages::server::ServerPacket::ConnectionRefused;
 use crate::seed::Seed;
-use crate::send_packet;
+use crate::{send_packet, send_packets};
 use crate::state::MultiworldState;
 use crate::structs::{GameName, SlotId};
 
@@ -158,7 +159,7 @@ impl ConnectionManager {
                 } else {
                     HashMap::new()
                 };
-                let result = ServerPacket::Connected(ConnectedPacket {
+                let connected_packet = ServerPacket::Connected(ConnectedPacket {
                     team: *team_id,
                     slot: *slot_id,
                     players: self.seed.players(),
@@ -168,6 +169,10 @@ impl ConnectionManager {
                     slot_info: slot_info.clone(),
                     hint_points: 0,
                 });
+                let received_items_packet = ServerPacket::ReceivedItems(ReceivedItemsPacket {
+                    index: 0,
+                    items: locked_state.received_items(&*self.seed, slot_id)
+                });
                 drop(locked_state);
                 self.connection_info = Some(ConnectionInfo {
                     slot: *slot_id,
@@ -175,7 +180,7 @@ impl ConnectionManager {
                     tags: c_packet.tags,
                     items_handling: c_packet.items_handling,
                 });
-                send_packet(&mut self.tx, result).await;
+                send_packets(&mut self.tx, vec![connected_packet, received_items_packet]).await;
             },
             ClientPacket::ConnectUpdate(c_packet) => {
                 let Some(info) = &self.connection_info else {
@@ -192,6 +197,19 @@ impl ConnectionManager {
                     tags: c_packet.tags,
                     items_handling: c_packet.items_handling,
                 })
+            },
+            ClientPacket::Sync => {
+                let Some(c_info) = &self.connection_info else {
+                    return Err(NotConnected {command: String::from("Sync")})
+                };
+
+                let locked_state = self.multiworld_state.lock().await;
+                let received_items_packet = ServerPacket::ReceivedItems(ReceivedItemsPacket {
+                    index: 0,
+                    items: locked_state.received_items(&*self.seed, &c_info.slot)
+                });
+                drop(locked_state);
+                send_packet(&mut self.tx, received_items_packet).await;
             }
         })
     }

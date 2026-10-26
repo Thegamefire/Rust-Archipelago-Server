@@ -12,5 +12,8 @@ pub mod messages;
 pub mod connection;
 
 pub async fn send_packet(tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>, packet: ServerPacket) {
-    tx.send(Message::Text(serde_json::to_string(&packet).unwrap().into())).await.expect("TODO: panic message");
+    tx.send(Message::Text(serde_json::to_string(&vec![packet]).unwrap().into())).await.expect("Failed to send packet to client");
+}
+pub async fn send_packets(tx: &mut SplitSink<WebSocketStream<TcpStream>, Message>, packet: Vec<ServerPacket>) {
+    tx.send(Message::Text(serde_json::to_string(&packet).unwrap().into())).await.expect("Failed to send packet to client");
 }

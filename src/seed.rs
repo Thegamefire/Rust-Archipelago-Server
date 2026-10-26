@@ -8,7 +8,7 @@ pub struct Seed {
     pub slot_data: HashMap<SlotId, HashMap<String, serde_json::Value>>,
     pub slot_info: HashMap<SlotId, (SlotName, GameName, SlotType, Vec<SlotId>)>,
     pub connect_names: HashMap<SlotName, (TeamId, SlotId)>,
-    pub locations: HashMap<SlotId, HashMap<LocationId, (ItemId, u32 /* item owner */, u8 /* item flags */)>>,
+    pub locations: HashMap<SlotId, HashMap<LocationId, (ItemId, SlotId, u8 /* item flags */)>>,
     // checks_in_area: serde_json::Value,
     // server_options:  serde_json::Value,
     // er_hint_data:  serde_json::Value,

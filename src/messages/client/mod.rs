@@ -12,6 +12,7 @@ use crate::messages::client::connect_update::ConnectUpdatePacket;
 pub enum ClientPacket {
     GetDataPackage(GetDataPackagePacket),
     Connect(ConnectPacket),
-    ConnectUpdate(ConnectUpdatePacket)
+    ConnectUpdate(ConnectUpdatePacket),
+    Sync
 }
 

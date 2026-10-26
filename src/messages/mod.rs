@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize, Serializer};
-use crate::structs::{SlotId, SlotName, TeamId};
+use crate::structs::{ItemId, LocationId, SlotId, SlotName, TeamId};
 
 pub mod client;
 pub mod server;
@@ -38,6 +38,26 @@ impl NetworkPlayer {
             slot,
             alias,
             name,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct NetworkItem {
+    class: String,
+    pub item: ItemId,
+    pub location: LocationId,
+    pub player: SlotId,
+    pub flags: u8,
+}
+impl NetworkItem {
+    pub fn new(item: ItemId, location: LocationId, player: SlotId, flags: u8) -> Self {
+        NetworkItem {
+            class: String::from("NetworkItem"),
+            item,
+            location,
+            player,
+            flags
         }
     }
 }
