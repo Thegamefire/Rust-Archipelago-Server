@@ -42,7 +42,8 @@ impl NetworkPlayer {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
+#[derive(Debug)]
 pub struct NetworkItem {
     class: String,
     pub item: ItemId,

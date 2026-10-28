@@ -3,6 +3,10 @@ use crate::messages::server::ServerPacket;
 use futures_util::SinkExt;
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
+use crate::messages::NetworkItem;
+use crate::messages::server::received_items::ReceivedItemsPacket;
+use crate::messages::server::ServerPacket::ReceivedItems;
+use crate::structs::SlotId;
 
 pub mod connection;
 pub mod messages;
@@ -26,4 +30,44 @@ pub async fn send_packets(id: Uuid, packet: Vec<ServerPacket>) {
         ))
         .await
         .expect("Failed to send packet to client");
+}
+
+pub async fn send_to_slot(packet: ServerPacket, slot: SlotId) {
+    let connections = CONNECTIONS.read().await;
+
+    let result_packet = serde_json::to_string(&packet).unwrap();
+
+    for connection in connections.values() {
+        match &connection.connection_info {
+            Some(info) if info.slot == slot => {
+                connection
+                    .tx
+                    .lock()
+                    .await
+                    .send(Message::Text(
+                        result_packet.clone().into()
+                    ))
+                    .await
+                    .expect("Failed to send packet to client");
+            },
+            _ => {}
+        }
+    }
+}
+
+pub async fn send_items_to_slot(items: Vec<NetworkItem>, slot: SlotId) {
+    let mut connections = CONNECTIONS.write().await;
+
+    for (c_id, connection) in connections.iter_mut() {
+        match &mut connection.connection_info {
+            Some(info) if info.slot == slot => {
+                send_packet(*c_id, ReceivedItems(ReceivedItemsPacket {
+                    index: info.next_ri_index,
+                    items: items.iter().cloned().collect()
+                })).await;
+                info.next_ri_index += 1;
+            },
+            _ => {}
+        }
+    }
 }
