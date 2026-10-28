@@ -290,31 +290,33 @@ impl ConnectionManager {
                 send_packet(self.uuid, received_items_packet).await;
             },
             ClientPacket::LocationChecks(l_packet) => {
-                let connections = CONNECTIONS.read().await;
-                let connection = connections.get(&self.uuid).unwrap();
-                let Some(info) = &connection.connection_info else {
-                    return Err(NotConnected {
-                        command: "ConnectUpdate".into(),
-                    });
+                let items = {
+                    let connections = CONNECTIONS.read().await;
+                    let connection = connections.get(&self.uuid).unwrap();
+                    let Some(info) = &connection.connection_info else {
+                        return Err(NotConnected {
+                            command: "ConnectUpdate".into(),
+                        });
+                    };
+
+                    let mut items: HashMap<SlotId, Vec<NetworkItem>> = HashMap::new();
+                    let current_slot_locations = self.seed.locations.get(&info.slot).expect("Connected Slot not in Seed Locations");
+
+                    for location in l_packet.locations {
+                        let Some((item_id, slot_id, flags)) = current_slot_locations.get(&location) else {
+                            return Err(InvalidArguments { text: String::from("Invalid location"), command : String::from("LocationChecks")});
+                        };
+                        let network_item =
+                            NetworkItem::new(*item_id, location, info.slot, *flags);
+                        match items.get_mut(slot_id) {
+                            Some(v) => v.push(network_item),
+                            None => { items.insert(*slot_id, vec![network_item]); }
+                        }
+                    }
+                    items
                 };
 
-                let mut items: HashMap<SlotId, Vec<NetworkItem>> = HashMap::new();
-                let current_slot_locations = self.seed.locations.get(&info.slot).expect("Connected Slot not in Seed Locations");
-
-                for location in l_packet.locations {
-                    let Some((item_id, slot_id, flags)) = current_slot_locations.get(&location) else {
-                        return Err(InvalidArguments { text: String::from("Invalid location"), command : String::from("LocationChecks")});
-                    };
-                    let network_item =
-                        NetworkItem::new(*item_id, location, info.slot, *flags);
-                    match items.get_mut(slot_id) {
-                        Some(v) => v.push(network_item),
-                        None => { items.insert(*slot_id, vec![network_item]); }
-                    }
-                }
-
                 for (slot, items) in items.into_iter() {
-                    println!("sending {:?} to {:?}", &items, slot);
                     send_items_to_slot(items, slot).await;
                 }
             }

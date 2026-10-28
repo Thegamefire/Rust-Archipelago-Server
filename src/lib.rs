@@ -56,18 +56,30 @@ pub async fn send_to_slot(packet: ServerPacket, slot: SlotId) {
 }
 
 pub async fn send_items_to_slot(items: Vec<NetworkItem>, slot: SlotId) {
-    let mut connections = CONNECTIONS.write().await;
+    let packets = {
+        let mut connections = CONNECTIONS.write().await;
+        let mut packets = Vec::new();
 
-    for (c_id, connection) in connections.iter_mut() {
-        match &mut connection.connection_info {
-            Some(info) if info.slot == slot => {
-                send_packet(*c_id, ReceivedItems(ReceivedItemsPacket {
-                    index: info.next_ri_index,
-                    items: items.iter().cloned().collect()
-                })).await;
-                info.next_ri_index += 1;
-            },
-            _ => {}
+        for (c_id, connection) in connections.iter_mut() {
+            if let Some(info) = &mut connection.connection_info {
+                if info.slot == slot {
+                    packets.push((
+                        *c_id,
+                        ServerPacket::ReceivedItems(ReceivedItemsPacket {
+                            index: info.next_ri_index,
+                            items: items.clone(),
+                        }),
+                    ));
+
+                    info.next_ri_index += 1;
+                }
+            }
         }
+
+        packets
+    }; // The CONNECTIONS write lock is released here.
+
+    for (c_id, packet) in packets {
+        send_packet(c_id, packet).await;
     }
 }
